@@ -58,27 +58,39 @@ bool ModbusController::send_next_command_() {
 }
 
 // Queue incoming response
-void ModbusController::on_modbus_data(const std::vector<uint8_t> &data) {
+void ModbusController::on_modbus_response(uint8_t function_code, uint8_t exception_code, const std::vector<uint8_t> &data) {
   auto &current_command = this->command_queue_.front();
   if (current_command != nullptr) {
-    if (this->module_offline_) {
-      ESP_LOGW(TAG, "Modbus device=%d back online", this->address_);
-
-      if (this->offline_skip_updates_ > 0) {
-        // Restore skip_updates_counter to restore commands updates
-        for (auto &r : this->register_ranges_) {
-          r.skip_updates_counter = 0;
+    // No errors in the incoming response
+    if (exception_code == 0) {
+      // Gestione dei dati
+      if (this->module_offline_) {
+        ESP_LOGW(TAG, "Modbus device=%d back online", this->address_);
+        if (this->offline_skip_updates_ > 0) {
+          // Restore skip_updates_counter to restore commands updates
+          for (auto &r : this->register_ranges_) {
+            r.skip_updates_counter = 0;
+          }
         }
+        // Restore module online state
+        this->module_offline_ = false;
+        this->online_callback_.call((int) current_command->function_code, current_command->register_address);
       }
-      // Restore module online state
-      this->module_offline_ = false;
-      this->online_callback_.call((int) current_command->function_code, current_command->register_address);
+      ESP_LOGV(TAG, "Modbus response DATA queued");
+    } else {
+      // Error logging
+      ESP_LOGE(TAG, "Modbus error function code: 0x%X exception: %d", function_code, exception_code);
+      ESP_LOGE(TAG,
+               "Modbus error - last command: function code=0x%X  register address = 0x%X  "
+               "registers count=%d "
+               "payload size=%zu",
+               function_code, current_command->register_address, current_command->register_count,
+               current_command->payload.size());
+      ESP_LOGV(TAG, "Modbus response ERROR queued");
     }
-
-    // Move the commandItem to the response queue
+    // Move the commandItem to the response queue regardless of error status
     current_command->payload = data;
     this->incoming_queue_.push(std::move(current_command));
-    ESP_LOGV(TAG, "Modbus response queued");
     this->command_queue_.pop_front();
   }
 }
@@ -88,21 +100,6 @@ void ModbusController::process_modbus_data_(const ModbusCommandItem *response) {
   ESP_LOGV(TAG, "Process modbus response for address 0x%X size: %zu", response->register_address,
            response->payload.size());
   response->on_data_func(response->register_type, response->register_address, response->payload);
-}
-
-void ModbusController::on_modbus_error(uint8_t function_code, uint8_t exception_code) {
-  ESP_LOGE(TAG, "Modbus error function code: 0x%X exception: %d ", function_code, exception_code);
-  // Remove pending command waiting for a response
-  auto &current_command = this->command_queue_.front();
-  if (current_command != nullptr) {
-    ESP_LOGE(TAG,
-             "Modbus error - last command: function code=0x%X  register address = 0x%X  "
-             "registers count=%d "
-             "payload size=%zu",
-             function_code, current_command->register_address, current_command->register_count,
-             current_command->payload.size());
-    this->command_queue_.pop_front();
-  }
 }
 
 void ModbusController::on_modbus_read_registers(uint8_t function_code, uint16_t start_address,
