@@ -440,10 +440,13 @@ class ModbusController : public PollingComponent, public modbus::ModbusDevice {
   void add_sensor_item(SensorItem *item) { sensorset_.insert(item); }
   /// Registers a server register with the controller. Called by esphomes code generator
   void add_server_register(ServerRegister *server_register) { server_registers_.push_back(server_register); }
+
   /// called when a modbus response was parsed without errors
-  void on_modbus_data(const std::vector<uint8_t> &data) override;
+  //void on_modbus_data(const std::vector<uint8_t> &data) override;
   /// called when a modbus error response was received
-  void on_modbus_error(uint8_t function_code, uint8_t exception_code) override;
+  //void on_modbus_error(uint8_t function_code, uint8_t exception_code) override;
+  void on_modbus_response(uint8_t function_code, uint8_t exception_code, const std::vector<uint8_t> &data) override;
+
   /// called when a modbus request (function code 3 or 4) was parsed without errors
   void on_modbus_read_registers(uint8_t function_code, uint16_t start_address, uint16_t number_of_registers) final;
   /// default delegate called by process_modbus_data when a response has retrieved from the incoming queue
