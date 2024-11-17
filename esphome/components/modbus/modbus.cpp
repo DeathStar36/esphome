@@ -134,7 +134,7 @@ bool Modbus::parse_modbus_byte_(uint8_t byte) {
       if ((function_code & 0x80) == 0x80) {
         ESP_LOGD(TAG, "Modbus error function code: 0x%X exception: %d", function_code, raw[2]);
         if (waiting_for_response != 0) {
-          device->on_modbus_error(function_code & 0x7F, raw[2]);
+          device->on_modbus_response(function_code & 0x7F, raw[2], {});
         } else {
           // Ignore modbus exception not related to a pending command
           ESP_LOGD(TAG, "Ignoring Modbus error - not expecting a response");
@@ -143,7 +143,7 @@ bool Modbus::parse_modbus_byte_(uint8_t byte) {
         device->on_modbus_read_registers(function_code, uint16_t(data[1]) | (uint16_t(data[0]) << 8),
                                          uint16_t(data[3]) | (uint16_t(data[2]) << 8));
       } else {
-        device->on_modbus_data(data);
+        device->on_modbus_response(function_code, 0, data);
       }
       found = true;
     }
